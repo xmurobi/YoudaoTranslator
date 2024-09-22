@@ -7,14 +7,14 @@
     "noEmitOnError": true,
     "lib": ["es2019", "dom", "dom.iterable"],
     "strict": true,
-    "esModuleInterop": false,
-    "outDir": "out-tsc",
-    "rootDir": "./"
+    "esModuleInterop": true, // 如果你使用了很多 npm 包，建议开启
+    "outDir": "dist", // 让它与 Rollup 的输出目录保持一致
+    "rootDir": "./",
+    "allowSyntheticDefaultImports": true,
   },
   "include": [
     "./src/**/*.ts",
     "src/libs/redaxios.js",
-    "src/adapters/youdao.js",
-    "src/libs/fetch.js"
+    "src/adapters/youdao.js"
   ]
 }

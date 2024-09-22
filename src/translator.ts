@@ -17,17 +17,24 @@ class Translator implements ITranslator{
   }
 
   public async translate(query: string): Promise<any> {
+
     // camel case to space case
     const word = query.replace(/([A-Z])/g, ' $1').toLowerCase();
     // url
     const url = this.adapter.url(word);
     // fetch
     const response = await redaxios.create().get(url);
+
+    // console.log("response", response)
     // parse
-    const result = this.adapter.parse(response.data);
+    // const result = this.adapter.parse(response.data);
+    const result = await this.adapter.parse(response.data);
+    
     // compose
     return new Workflow().compose(result).output();
   }
 }
 
 export default Translator;
+
+

@@ -23,7 +23,7 @@ class Workflow {
   }
 
   output(): string {
-    return JSON.stringify({ items: this.results });
+    return JSON.stringify({ "items": this.results });
   }
 }
 

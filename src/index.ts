@@ -1,15 +1,29 @@
-declare var tjs
+
+declare var tjs;
 
 import Translator from './translator';
 
+
 const main = async () => {
-  const translator = new Translator(tjs.getenv('key'), tjs.getenv('secret'), tjs.getenv('platform'));
+  try {
+    // console.log('platform:', tjs.env['platform'], "key", tjs.env['key'], "sec", tjs.env['secret'] )
 
-  const word: string = Array.from(tjs.args).pop() as string;
+    const translator = new Translator(
+      tjs.env['key'] || '', 
+      tjs.env['secret'] || '', 
+      tjs.env['platform'] || 'Youdao'
+    );
 
-  const result = await translator.translate(word);
 
-  console.log(result);
-}
+    const word: string = Array.from(tjs.args).pop() as string;
+
+    var result = await translator.translate(word);
+
+    console.log(result);
+
+  } catch (error) {
+    console.error('Error during translation:', error);
+  }
+};
 
 main();

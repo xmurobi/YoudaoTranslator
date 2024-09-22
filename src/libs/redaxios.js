@@ -16,7 +16,7 @@
  * @typedef Options
  * @property {string} [url] the URL to request
  * @property {'get'|'post'|'put'|'patch'|'delete'|'options'|'head'|'GET'|'POST'|'PUT'|'PATCH'|'DELETE'|'OPTIONS'|'HEAD'} [method="get"] HTTP method, case-insensitive
- * @property {Headers} [headers] Request headers
+ * @property {RequestHeaders} [headers] Request headers
  * @property {FormData|string|object} [body] a body, optionally encoded, to send
  * @property {'text'|'json'|'stream'|'blob'|'arrayBuffer'|'formData'|'stream'} [responseType="json"] An encoding to use for the response
  * @property {Record<string,any>|URLSearchParams} [params] querystring parameters
@@ -26,7 +26,7 @@
  * @property {string} [xsrfCookieName] Pass an Cross-site Request Forgery prevention cookie value as a header defined by `xsrfHeaderName`
  * @property {string} [xsrfHeaderName] The name of a header to use for passing XSRF cookies
  * @property {(status: number) => boolean} [validateStatus] Override status code handling (default: 200-399 is a success)
- * @property {Array<(body: any, headers: Headers) => any?>} [transformRequest] An array of transformations to apply to the outgoing request
+ * @property {Array<(body: any, headers?: RequestHeaders) => any?>} [transformRequest] An array of transformations to apply to the outgoing request
  * @property {string} [baseURL] a base URL from which to resolve all URLs
  * @property {typeof window.fetch} [fetch] Custom window.fetch implementation
  * @property {any} [data]
@@ -34,8 +34,8 @@
 
 /**
  * @public
- * @typedef Headers
- * @type {{[name: string]: string}}
+ * @typedef RequestHeaders
+ * @type {{[name: string]: string} | Headers}
  */
 
 /**
@@ -64,8 +64,12 @@
  * @type {<T=any>(url: string, body?: any, config?: Options) => Promise<Response<T>>}
  */
 
-/** */
-export default (function create(/** @type {Options} */ defaults) {
+/**
+ * @public
+ * @param {Options} [defaults = {}]
+ * @returns {redaxios}
+ */
+function create(defaults) {
 	defaults = defaults || {};
 
 	/**
@@ -105,25 +109,21 @@ export default (function create(/** @type {Options} */ defaults) {
 	 * @param {(...args: Args[]) => R} fn
 	 * @returns {(array: Args[]) => R}
 	 */
-	redaxios.spread = function (fn) {
-		return function (results) {
-			return fn.apply(this, results);
-		};
-	};
-	// 3b smaller:
-	// redaxios.spread = (fn) => /** @type {any} */ (fn.apply.bind(fn, fn));
+	redaxios.spread = (fn) => /** @type {any} */ (fn.apply.bind(fn, fn));
 
 	/**
 	 * @private
-	 * @param {Record<string,any>} opts
-	 * @param {Record<string,any>} [overrides]
+	 * @template T, U
+	 * @param {T} opts
+	 * @param {U} [overrides]
 	 * @param {boolean} [lowerCase]
-	 * @returns {Partial<opts>}
+	 * @returns {{} & (T | U)}
 	 */
 	function deepMerge(opts, overrides, lowerCase) {
-		let out = {},
+		let out = /** @type {any} */ ({}),
 			i;
 		if (Array.isArray(opts)) {
+			// @ts-ignore
 			return opts.concat(overrides);
 		}
 		for (i in opts) {
@@ -133,7 +133,7 @@ export default (function create(/** @type {Options} */ defaults) {
 		for (i in overrides) {
 			const key = lowerCase ? i.toLowerCase() : i;
 			const value = /** @type {any} */ (overrides)[i];
-			out[key] = key in out && typeof value == 'object' ? deepMerge(out[key], value, key === 'headers') : value;
+			out[key] = key in out && typeof value == 'object' ? deepMerge(out[key], value, key == 'headers') : value;
 		}
 		return out;
 	}
@@ -142,70 +142,68 @@ export default (function create(/** @type {Options} */ defaults) {
 	 * Issues a request.
 	 * @public
 	 * @template T
-	 * @param {string | Options} url
-	 * @param {Options} [config]
-	 * @param {any} [_method]
-	 * @param {any} [_data]
+	 * @param {string | Options} urlOrConfig
+	 * @param {Options} [config = {}]
+	 * @param {any} [_method] (internal)
+	 * @param {any} [data] (internal)
+	 * @param {never} [_undefined] (internal)
 	 * @returns {Promise<Response<T>>}
 	 */
-	function redaxios(url, config, _method, _data) {
-		if (typeof url !== 'string') {
-			config = url;
-			url = config.url;
-		}
+	function redaxios(urlOrConfig, config, _method, data, _undefined) {
+		let url = /** @type {string} */ (typeof urlOrConfig != 'string' ? (config = urlOrConfig).url : urlOrConfig);
 
 		const response = /** @type {Response<any>} */ ({ config });
 
 		/** @type {Options} */
 		const options = deepMerge(defaults, config);
 
-		/** @type {Headers} */
+		/** @type {RequestHeaders} */
 		const customHeaders = {};
 
-		let data = _data || options.data;
+		data = data || options.data;
 
 		(options.transformRequest || []).map((f) => {
 			data = f(data, options.headers) || data;
 		});
 
-		if (data && typeof data === 'object' && typeof data.append !== 'function') {
-			data = JSON.stringify(data);
-			customHeaders['content-type'] = 'application/json';
-		}
-
-		const m =
-			typeof document !== 'undefined' && document.cookie.match(RegExp('(^|; )' + options.xsrfCookieName + '=([^;]*)'));
-		if (m) customHeaders[options.xsrfHeaderName] = decodeURIComponent(m[2]);
-
 		if (options.auth) {
 			customHeaders.authorization = options.auth;
 		}
 
+		if (data && typeof data === 'object' && typeof data.append !== 'function' && typeof data.text !== 'function') {
+			data = JSON.stringify(data);
+			customHeaders['content-type'] = 'application/json';
+		}
+
+		try {
+			// @ts-ignore providing the cookie name without header name is nonsensical anyway
+			customHeaders[options.xsrfHeaderName] = decodeURIComponent(
+				// @ts-ignore accessing match()[2] throws for no match, which is intentional
+				document.cookie.match(RegExp('(^|; )' + options.xsrfCookieName + '=([^;]*)'))[2]
+			);
+		} catch (e) {}
+
 		if (options.baseURL) {
-			url = url.replace(/^(?!.*\/\/)\/?(.*)$/, options.baseURL + '/$1');
+			url = url.replace(/^(?!.*\/\/)\/?/, options.baseURL + '/');
 		}
 
 		if (options.params) {
-			const divider = ~url.indexOf('?') ? '&' : '?';
-			const query = options.paramsSerializer
-				? options.paramsSerializer(options.params)
-				: new URLSearchParams(options.params);
-			url += divider + query;
+			url +=
+				(~url.indexOf('?') ? '&' : '?') +
+				(options.paramsSerializer ? options.paramsSerializer(options.params) : new URLSearchParams(options.params));
 		}
 
 		const fetchFunc = options.fetch || fetch;
 
 		return fetchFunc(url, {
-			method: _method || options.method,
+			method: (_method || options.method || 'get').toUpperCase(),
 			body: data,
 			headers: deepMerge(options.headers, customHeaders, true),
-			credentials: options.withCredentials ? 'include' : 'same-origin'
+			credentials: options.withCredentials ? 'include' : _undefined
 		}).then((res) => {
 			for (const i in res) {
 				if (typeof res[i] != 'function') response[i] = res[i];
 			}
-
-			const ok = options.validateStatus ? options.validateStatus(res.status) : res.ok;
 
 			if (options.responseType == 'stream') {
 				response.data = res.body;
@@ -219,7 +217,10 @@ export default (function create(/** @type {Options} */ defaults) {
 					response.data = JSON.parse(data);
 				})
 				.catch(Object)
-				.then(() => (ok ? response : Promise.reject(response)));
+				.then(() => {
+					const ok = options.validateStatus ? options.validateStatus(res.status) : res.ok;
+					return ok ? response : Promise.reject(response);
+				});
 		});
 	}
 
@@ -241,4 +242,6 @@ export default (function create(/** @type {Options} */ defaults) {
 	redaxios.create = create;
 
 	return redaxios;
-})();
+}
+
+export default create();
