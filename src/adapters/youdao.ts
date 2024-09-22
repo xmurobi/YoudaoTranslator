@@ -94,6 +94,7 @@ class Youdao implements Adapter {
   private async parseWebdict(t: any) {
     const url = t?.["url"];
     try {
+      // console.log("Webdict URL:", url);
       const response = await redaxios.create().get(url);
       if (!response.ok) {
         throw new Error('Network response was not ok.');
@@ -105,10 +106,12 @@ class Youdao implements Adapter {
 
       // 查找所有符合条件的 div.content-wrp.dict-container.opened
       const dictContainers = this.findElementsByClass(document, 'div', ['content-wrp', 'dict-container', 'opened']);
+      // console.log("How many containers:",dictContainers.length);
 
       dictContainers.forEach((el) => {
         this.parseResultItems(el);
       });
+
     } catch (error) {
       console.error('There has been a problem with your fetch operation:', error);
     }
@@ -119,8 +122,8 @@ class Youdao implements Adapter {
 
     // 查找 div.trans-container
     const transContainers = this.findElementsByClass(item, 'div', ['trans-container']);
-
     transContainers.forEach((tc) => {
+
       let phonetics: string[] = [];
 
       // 查找所有 span.phonetic
@@ -140,8 +143,39 @@ class Youdao implements Adapter {
 
       const phoneticsCombined = phonetics.join('; ');
       if (phoneticsCombined) {
-        this.addResult(phoneticsCombined, "回车可听发音", e, e);
+        this.addResult(phoneticsCombined, "回车可听发音", e, e, true, false);
       }
+
+      // 查找所有 span style="cursor: pointer;"
+      // let trans = [];
+      // const transItems = this.findElementsByClass(tc, 'div', ['trans-container', 'web_trans']);
+      // transItems.forEach((item) => {
+
+      //     // 获取所有 span 子元素
+      //     const spanElements = this.findElementsByTag(item, 'span');
+      //     let title = '';
+      //     if (spanElements.length > 0) {
+      //         title = this.getTextContent(spanElements[0]).trim();  // 获取 span 的文本内容
+
+      //         const parent = spanElements[0].parentNode;
+
+      //         let subtitle = "";
+      //         if (parent && parent.childNodes.length > 2) {
+      //             const firstChild = parent.childNodes[1];
+      //             if (firstChild.nodeName === '#text') {
+      //                 subtitle = firstChild.value.trim();  // 获取子节点的文本
+      //             }
+      //         }
+      //         // console.log("subtitle:", subtitle)
+
+      //         // 调用 addResult，确保 title 不为空
+      //         if (title) {
+      //             this.addResult(title, subtitle);
+      //         }
+
+      //     }
+
+      // });
     });
 
     // 查找所有 ul li 和 ul a.clickable
@@ -151,6 +185,7 @@ class Youdao implements Adapter {
       lis.forEach((li) => {
         const text = this.getTextContent(li).trim();
         if (text) {
+          // console.log("Got text:", this.fixEncodingBrowser(text));
           this.addResult(text, this.word, e, e);
         }
       });
@@ -164,6 +199,7 @@ class Youdao implements Adapter {
       });
     });
   }
+
 
   /**
    * 查找具有特定类名的元素
@@ -272,22 +308,27 @@ class Youdao implements Adapter {
 
     const message = messages[code] || "请参考错误码：" + code;
 
-    return this.addResult("👻 翻译出错啦", message, "Ooops...");
+    return this.addResult("👻 翻译出错啦", message, "Ooops...", "", false, false);
   }
 
-  private addResult( title: string, subtitle: string, arg: string = "", pronounce: string = ""): Result[] {
+  private addResult( title: string, subtitle: string, arg: string = "", pronounce: string = "", fixtitle: boolean = true, fixsubtitle: boolean = true): Result[] {
     const quicklookurl = "https://www.youdao.com/w/" + this.word;
+    // 修复乱码
+    if (fixtitle) {
+      title = this.fixEncodingBrowser(title);
+    }
 
-    const maxLength = this.detectChinese(title) ? 27 : 60;
+    const maxLength = this.detectChinese(title) ? 24 : 60;
     
     if (title.length > maxLength) {
       const copy = title;
-      title = copy.slice(0, maxLength);
-      subtitle = copy.slice(maxLength);
-    }
+      // 使用 Array.from() 来处理 Unicode 字符，防止多字节字符乱码
+      const titleArray = Array.from(copy);
 
-    // 修复乱码
-    title = this.fixEncodingBrowser(title);
+      title = titleArray.slice(0, maxLength).join('');
+      subtitle = titleArray.slice(maxLength).join('');
+    } 
+
 
     this.results.push({ title, subtitle, arg, pronounce, quicklookurl });
     return this.results;
@@ -308,10 +349,11 @@ class Youdao implements Adapter {
       return decoded;
   }
 
-
   private detectChinese(word: string): boolean {
-    return /^[\u4e00-\u9fa5]+$/.test(word);
+    // 使用正则表达式检测是否包含中文字符 (包括全角字符)
+    return /[\u4e00-\u9fff\u3400-\u4dbf\u20000-\u2a6df\u2a700-\u2b73f\u2b740-\u2b81f\u2b820-\u2ceaf]/.test(word);
   }
+
 }
 
 export default Youdao;
