@@ -8,12 +8,11 @@
 
 ![screenshot_1](screenshots/screenshot_1.png)
 
-## ⚠️ V3 更新说明
-该版本使用 TS 重构，自带运行环境，不再依赖 PHP。同时支持多个平台的 API。
-
-macOS Monterey 请使用 V3 版本！
-
-标记为施工中 (🚧) 特性 V3 尚未支持，如果需要使用，请切换到 V2 使用。
+## ⚠️ V3.1.2 更新说明
+1. Latest txiki build for Apple Silicon. 
+2. Use [parser5](https://github.com/inikulin/parse5) as html parser lib.
+3. Use webpack to replace rollup.
+4. fix youdao bugs(one line, Chinese encoding issue...)
 
 ## 特性
 - 🌟 [**无系统环境依赖**]() - 自带 [txiki](https://github.com/saghul/txiki.js) 运行环境，不再需要 PHP
